@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    APSoft APPrinterDoctor v1.0.0
+    APSoft APPrinterDoctor v1.1.0
 .DESCRIPTION
     Diagnostica y repara componentes comunes del subsistema de impresion de Windows,
     incluida la recuperacion de Microsoft Print to PDF.
@@ -21,7 +21,8 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $Script:AppName = 'APPrinterDoctor'
-$Script:Version = '1.0.0'
+$Script:Version = '1.1.0'
+$Script:LogRetentionDays = 30
 $Script:BasePath = Join-Path $env:ProgramData 'APSoft\APPrinterDoctor'
 $Script:LogPath = Join-Path $Script:BasePath 'Logs'
 $Script:LogFile = Join-Path $Script:LogPath ("APPrinterDoctor_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
@@ -31,6 +32,9 @@ $Script:PdfDriver = 'Microsoft Print To PDF'
 $Script:PdfPort = 'PORTPROMPT:'
 
 New-Item -ItemType Directory -Path $Script:LogPath -Force | Out-Null
+Get-ChildItem -Path $Script:LogPath -Filter 'APPrinterDoctor_*.log' -File -ErrorAction SilentlyContinue |
+    Where-Object { $_.LastWriteTime -lt (Get-Date).AddDays(-$Script:LogRetentionDays) } |
+    Remove-Item -Force -ErrorAction SilentlyContinue
 
 function Write-APLog {
     param([Parameter(Mandatory)][string]$Message,

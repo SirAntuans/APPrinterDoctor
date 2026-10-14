@@ -1,22 +1,47 @@
 # APSoft APPrinterDoctor
 
-Herramienta PowerShell para diagnosticar y reparar el subsistema de impresion de Windows, incluida **Microsoft Print to PDF**.
+**Professional Printing Repair Toolkit for Windows**
 
-## Funciones de la version 1.0.0
+APPrinterDoctor es una solución de diagnóstico y recuperación desarrollada por APSoft para automatizar la detección y corrección de incidencias en el ecosistema de impresión de Windows 10 y Windows 11.
 
-- Health Check del Spooler, feature PDF, controlador, puerto, impresora y cola.
-- Configuracion y arranque del servicio Spooler.
-- Limpieza segura de trabajos bloqueados.
-- Recreacion de Microsoft Print to PDF cuando el driver y `PORTPROMPT:` estan disponibles.
-- Recuperacion profunda del componente PDF mediante deshabilitacion, reinicio y rehabilitacion.
-- Logs en `%ProgramData%\APSoft\APPrinterDoctor\Logs`.
-- Menu interactivo y acciones aptas para automatizacion.
+La herramienta analiza el estado de los componentes críticos del sistema de impresión, incluyendo:
+
+- Servicio Print Spooler
+- Cola de impresión
+- Controladores de impresora
+- Puertos de impresión
+- Microsoft Print to PDF
+- Características opcionales de Windows relacionadas con impresión
+
+Mediante un motor de validación basado en estados, APPrinterDoctor identifica la causa raíz del problema y ejecuta únicamente las acciones necesarias para restaurar la funcionalidad del sistema, evitando reparaciones innecesarias o invasivas.
+
+## Características
+
+- ✅ Health Check completo
+- ✅ Reparación automática del Spooler
+- ✅ Limpieza segura de colas de impresión
+- ✅ Recuperación de Microsoft Print to PDF
+- ✅ Reconstrucción basada en estados
+- ✅ Registro detallado de eventos y acciones
+- ✅ Código de salida para automatización
+- ✅ Pruebas automatizadas con Pester
+- ✅ Integración con GitHub Actions
+
+## Casos de uso
+
+- La impresora PDF desapareció.
+- No es posible imprimir.
+- El Spooler se detiene constantemente.
+- Existen trabajos bloqueados en cola.
+- Error al generar PDF desde aplicaciones.
+- Controladores inconsistentes o dañados.
+- Diagnóstico preventivo antes de desplegar estaciones de trabajo.
 
 ## Requisitos
 
 - Windows 10 o Windows 11.
 - Windows PowerShell 5.1 o PowerShell 7.
-- Ejecucion como administrador.
+- Ejecución como administrador.
 
 ## Uso
 
@@ -37,20 +62,32 @@ Reparar Microsoft Print to PDF:
 .\APPrinterDoctor.ps1 -Action RepairPDF
 ```
 
-Recuperacion profunda cuando el driver esta ausente o inconsistente:
+Recuperación profunda cuando el driver está ausente o inconsistente:
 
 ```powershell
 .\APPrinterDoctor.ps1 -Action RepairPDF -ForceComponentRepair
 ```
 
-> La recuperacion profunda puede requerir dos reinicios. Tras cada reinicio, vuelva a ejecutar `RepairPDF` hasta obtener estado saludable.
+> La recuperación profunda puede requerir dos reinicios. Tras cada reinicio, vuelva a ejecutar `RepairPDF` hasta obtener estado saludable.
 
-## Codigos de salida
+## Códigos de salida
 
-- `0`: operacion completada.
+- `0`: operación completada.
 - `1`: error general o falta de privilegios.
-- `2`: reparacion incompleta.
+- `2`: reparación incompleta.
 - `3010`: reinicio requerido.
+
+## Desarrollo
+
+### Pruebas con Pester
+
+```powershell
+Invoke-Pester -Path .\Tests
+```
+
+### Integración continua
+
+El repositorio incluye un workflow de GitHub Actions (`.github/workflows/ci.yml`) que valida la sintaxis del script y ejecuta las pruebas Pester en Windows.
 
 ## Seguridad
 
