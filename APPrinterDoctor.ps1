@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    APSoft APPrinterDoctor v1.2.0
+    APSoft APPrinterDoctor v1.3.0
 .DESCRIPTION
     Diagnostica y repara componentes comunes del subsistema de impresion de Windows,
     incluida la recuperacion de Microsoft Print to PDF.
@@ -14,7 +14,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('Menu','HealthCheck','RepairSpooler','ClearQueue','RepairPDF','CleanVendors','FullRepair')]
+    [ValidateSet('Menu','HealthCheck','RepairSpooler','ClearQueue','RepairPDF','CleanVendors','CleanDrivers','FullRepair')]
     [string]$Action = 'Menu',
     [switch]$ForceComponentRepair,
     [switch]$NoPause
@@ -23,9 +23,10 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $Script:AppName = 'APPrinterDoctor'
-$Script:Version = '1.2.0'
+$Script:Version = '1.3.0'
 $Script:LogRetentionDays = 30
 $Script:VendorKeywords = @('HP','Hewlett-Packard','Epson','Canon','Brother','Lexmark','Samsung','Xerox','Ricoh','Dell')
+$Script:VendorProcessPatterns = @('HP*','HPPA*','HPNotify*','Hpq*','Epson*','EPSON*','EEventManager*','Canon*','IJ*','Brother*','BrXP*','Lexmark*','lxdw*','Samsung*','Xerox*','Ricoh*')
 $Script:BasePath = Join-Path $env:ProgramData 'APSoft\APPrinterDoctor'
 $Script:LogPath = Join-Path $Script:BasePath 'Logs'
 $Script:LogFile = Join-Path $Script:LogPath ("APPrinterDoctor_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
@@ -171,6 +172,83 @@ function Get-APVendorSoftware {
     return ,$apps
 }
 
+function Stop-APVendorProcesses {
+    [CmdletBinding(SupportsShouldProcess)] param()
+    $stopped = 0
+    foreach ($pattern in $Script:VendorProcessPatterns) {
+        $procs = Get-Process -Name $pattern -ErrorAction SilentlyContinue
+        foreach ($p in $procs) {
+            if ($PSCmdlet.ShouldProcess($p.ProcessName,"Detener proceso")) {
+                try {
+                    Stop-Process -Id $p.Id -Force -ErrorAction Stop
+                    Write-APLog "Proceso detenido: $($p.ProcessName) (PID $($p.Id))" 'OK'
+                    $stopped++
+                } catch {
+                    Write-APLog "No se pudo detener $($p.ProcessName): $($_.Exception.Message)" 'WARN'
+                }
+            }
+        }
+    }
+    if ($stopped -eq 0) { Write-APLog 'No habia procesos de fabricantes activos.' 'OK' }
+    return $stopped
+}
+
+function Get-APOrphanDrivers {
+    [CmdletBinding()] param()
+    $printers = Get-Printer -ErrorAction SilentlyContinue
+    $usedDrivers = $printers | ForEach-Object { $_.DriverName } | Sort-Object -Unique
+    $drivers = Get-PrinterDriver -ErrorAction SilentlyContinue
+    $orphans = @()
+    foreach ($d in $drivers) {
+        if ($usedDrivers -notcontains $d.Name) { $orphans += $d }
+    }
+    return ,$orphans
+}
+
+function Remove-APOrphanDrivers {
+    [CmdletBinding(SupportsShouldProcess)] param()
+    $orphans = Get-APOrphanDrivers
+    if ($orphans.Count -eq 0) {
+        Write-APLog 'No hay drivers huerfanos.' 'OK'
+        return 0
+    }
+    Write-Host "`nDrivers huerfanos (sin impresora asociada):" -ForegroundColor Cyan
+    $orphans | Select-Object Name,Manufacturer | Format-Table -AutoSize
+    if (-not $PSCmdlet.ShouldProcess('Drivers huerfanos','Eliminar drivers sin impresora asociada')) {
+        Write-APLog 'Limpieza de drivers huerfanos cancelada.' 'WARN'
+        return 2
+    }
+    $removed = 0; $failed = 0
+    foreach ($d in $orphans) {
+        try {
+            Remove-PrinterDriver -Name $d.Name -ErrorAction Stop
+            Write-APLog "Driver huerfano eliminado: $($d.Name)" 'OK'
+            $removed++
+        } catch {
+            Write-APLog "Fallo eliminando driver $($d.Name): $($_.Exception.Message)" 'ERROR'
+            $failed++
+        }
+    }
+    Write-APLog "Drivers huerfanos: $removed eliminados, $failed fallidos." $(if($failed -eq 0){'OK'}else{'WARN'})
+    return $(if ($failed -eq 0) { 0 } else { 2 })
+}
+
+function Export-APReport {
+    [CmdletBinding()] param(
+        [Parameter(Mandatory)][psobject]$Data,
+        [Parameter(Mandatory)][ValidateSet('JSON','CSV')][string]$Format,
+        [string]$Path
+    )
+    if (-not $Path) {
+        $ext = $Format.ToLower()
+        $Path = Join-Path $Script:BasePath ("APPrinterDoctor_Report_{0}.{1}" -f (Get-Date -Format 'yyyyMMdd_HHmmss'),$ext)
+    }
+    if ($Format -eq 'JSON') { $Data | ConvertTo-Json -Depth 5 | Set-Content -LiteralPath $Path -Encoding UTF8 }
+    else { $Data | Export-Csv -LiteralPath $Path -NoTypeInformation -Encoding UTF8 }
+    Write-APLog "Reporte exportado: $Path" 'OK'
+    return $Path
+}
+
 function Remove-APVendorSoftware {
     [CmdletBinding(SupportsShouldProcess)] param()
     $apps = Get-APVendorSoftware
@@ -184,6 +262,8 @@ function Remove-APVendorSoftware {
         Write-APLog 'Limpieza de fabricantes cancelada por el usuario.' 'WARN'
         return 2
     }
+    Write-APLog 'Deteniendo procesos de fabricantes antes de desinstalar.' 'WARN'
+    Stop-APVendorProcesses -Confirm:$false | Out-Null
     $removed = 0; $failed = 0
     foreach ($app in $apps) {
         Write-Host "Desinstalando: $($app.Name)" -ForegroundColor Yellow
@@ -238,6 +318,7 @@ function Show-APMenu {
         Write-Host '6. Reparacion completa'
         Write-Host '7. Limpiar software de fabricantes (HP/Epson/Canon...)'
         Write-Host '8. Escanear software de fabricantes (solo deteccion)'
+        Write-Host '9. Limpiar drivers huerfanos'
         Write-Host '0. Salir'
         $choice=Read-Host 'Seleccione una opcion'
         try {
@@ -250,6 +331,7 @@ function Show-APMenu {
                 '6'{Invoke-APFullRepair|Out-Null}
                 '7'{Remove-APVendorSoftware|Out-Null}
                 '8'{Get-APVendorSoftware|Format-Table Name,Version,Vendor -AutoSize}
+                '9'{Remove-APOrphanDrivers|Out-Null}
                 '0'{return}
                 default{Write-Host 'Opcion no valida.' -ForegroundColor Yellow}
             }
@@ -262,11 +344,12 @@ try {
     Assert-APWindows
     Write-APLog "Inicio de APPrinterDoctor v$Script:Version. Accion: $Action"
     $exitCode=switch($Action){
-        'HealthCheck'{Get-APHealthCheck|Out-Null;0}
+        'HealthCheck'{$h=Get-APHealthCheck; Export-APReport -Data $h -Format JSON | Out-Null; 0}
         'RepairSpooler'{Repair-APSpooler;0}
         'ClearQueue'{Clear-APPrintQueue -Confirm:$false;0}
         'RepairPDF'{Repair-APPrintToPDF -ForceComponentRepair:$ForceComponentRepair}
         'CleanVendors'{Remove-APVendorSoftware -Confirm:$false}
+        'CleanDrivers'{Remove-APOrphanDrivers -Confirm:$false}
         'FullRepair'{Invoke-APFullRepair}
         default{Show-APMenu;0}
     }

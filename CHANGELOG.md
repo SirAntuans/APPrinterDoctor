@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.0
+- `Stop-APVendorProcesses`: detiene procesos de fabricantes (HP, Epson, Canon, Brother, etc.) antes de desinstalar, evitando fallos por archivos en uso.
+- `CleanDrivers` / `Remove-APOrphanDrivers`: detecta y elimina drivers sin impresora asociada.
+- `Export-APReport`: HealthCheck exporta automaticamente reporte JSON en `%ProgramData%\APSoft\APPrinterDoctor` como evidencia.
+- Menu ampliado con limpieza de drivers huerfanos (opcion 9).
+
 ## 1.2.0
 - Nueva accion `CleanVendors`: deteccion y desinstalacion de software de fabricantes (HP, Epson, Canon, Brother, Lexmark, Samsung, Xerox, Ricoh, Dell) relacionado con impresion.
 - Escaneo sin desinstalar desde el menu (opcion 8) y accion automatizable `CleanVendors`.

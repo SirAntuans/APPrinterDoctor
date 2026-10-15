@@ -22,7 +22,7 @@ Describe 'APPrinterDoctor - Parametros' {
         $param | Should -Not -BeNullOrEmpty
         $validateSet = $param.Attributes | Where-Object { $_.TypeName.Name -eq 'ValidateSet' }
         $validateSet | Should -Not -BeNullOrEmpty
-        ($validateSet.PositionalArguments.Extent.Text -join ',') | Should -Be "'Menu','HealthCheck','RepairSpooler','ClearQueue','RepairPDF','CleanVendors','FullRepair'"
+        ($validateSet.PositionalArguments.Extent.Text -join ',') | Should -Be "'Menu','HealthCheck','RepairSpooler','ClearQueue','RepairPDF','CleanVendors','CleanDrivers','FullRepair'"
     }
 
     It 'Declara ForceComponentRepair como switch' {
@@ -35,7 +35,7 @@ Describe 'APPrinterDoctor - Parametros' {
 Describe 'APPrinterDoctor - Estructura' {
     It 'Define las funciones principales' {
         $functions = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
-        foreach ($name in @('Write-APLog','Test-APAdministrator','Assert-APWindows','Get-APHealthCheck','Repair-APSpooler','Clear-APPrintQueue','Repair-APPrintToPDF','Get-APVendorSoftware','Remove-APVendorSoftware','Invoke-APFullRepair','Show-APMenu')) {
+        foreach ($name in @('Write-APLog','Test-APAdministrator','Assert-APWindows','Get-APHealthCheck','Repair-APSpooler','Clear-APPrintQueue','Repair-APPrintToPDF','Get-APVendorSoftware','Remove-APVendorSoftware','Stop-APVendorProcesses','Get-APOrphanDrivers','Remove-APOrphanDrivers','Export-APReport','Invoke-APFullRepair','Show-APMenu')) {
             ($functions | Where-Object { $_.Name -eq $name }) | Should -Not -BeNullOrEmpty
         }
     }
@@ -50,6 +50,15 @@ Describe 'APPrinterDoctor - Estructura' {
         $content | Should -Match 'VendorKeywords'
         $content | Should -Match 'Get-APVendorSoftware'
         $content | Should -Match 'Remove-APVendorSoftware'
+    }
+
+    It 'Implementa procesos vendor, drivers huerfanos y reportes' {
+        $content = Get-Content $scriptPath -Raw
+        $content | Should -Match 'Stop-APVendorProcesses'
+        $content | Should -Match 'VendorProcessPatterns'
+        $content | Should -Match 'Get-APOrphanDrivers'
+        $content | Should -Match 'Remove-APOrphanDrivers'
+        $content | Should -Match 'Export-APReport'
     }
 }
 

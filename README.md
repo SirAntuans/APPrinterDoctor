@@ -27,6 +27,9 @@ Mediante un motor de validación basado en estados, APPrinterDoctor identifica l
 - ✅ Pruebas automatizadas con Pester
 - ✅ Integración con GitHub Actions
 - ✅ Detección y limpieza de software de fabricantes (HP, Epson, Canon, Brother, Lexmark, Samsung, Xerox, Ricoh, Dell)
+- ✅ Eliminación de drivers huérfanos sin impresora asociada
+- ✅ Cierre de procesos de fabricantes antes de desinstalar
+- ✅ Reporte JSON automático del Health Check como evidencia
 
 ## Casos de uso
 
@@ -78,7 +81,17 @@ Escanear y limpiar software de fabricantes (HP, Epson, Canon, etc.):
 .\APPrinterDoctor.ps1 -Action CleanVendors
 ```
 
-> La acción detecta aplicaciones de fabricantes relacionadas con impresión, las lista y solicita confirmación antes de desinstalarlas. Tras la limpieza reinicia el Spooler. También puede solo escanear desde el menú (opción 8). Se recomienda ejecutar Health Check después para validar el estado del sistema.
+> La acción detecta aplicaciones de fabricantes relacionadas con impresión, detiene sus procesos, las lista y solicita confirmación antes de desinstalarlas. Tras la limpieza reinicia el Spooler. También puede solo escanear desde el menú (opción 8). Se recomienda ejecutar Health Check después para validar el estado del sistema.
+
+Limpiar drivers huérfanos (instalados sin impresora asociada):
+
+```powershell
+.\APPrinterDoctor.ps1 -Action CleanDrivers
+```
+
+> Cada ejecución de `HealthCheck` exporta un reporte JSON en `%ProgramData%\APSoft\APPrinterDoctor` con el estado de todos los componentes, útil como evidencia para soporte.
+
+**Flujo recomendado de limpieza:** `CleanVendors` → `CleanDrivers` → reinicio → `FullRepair` → `HealthCheck`.
 
 ## Códigos de salida
 
