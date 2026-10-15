@@ -26,6 +26,7 @@ Mediante un motor de validación basado en estados, APPrinterDoctor identifica l
 - ✅ Código de salida para automatización
 - ✅ Pruebas automatizadas con Pester
 - ✅ Integración con GitHub Actions
+- ✅ Detección y limpieza de software de fabricantes (HP, Epson, Canon, Brother, Lexmark, Samsung, Xerox, Ricoh, Dell)
 
 ## Casos de uso
 
@@ -36,6 +37,7 @@ Mediante un motor de validación basado en estados, APPrinterDoctor identifica l
 - Error al generar PDF desde aplicaciones.
 - Controladores inconsistentes o dañados.
 - Diagnóstico preventivo antes de desplegar estaciones de trabajo.
+- Software de fabricantes (HP, Epson, Canon, etc.) que genera conflictos entre instalaciones.
 
 ## Requisitos
 
@@ -69,6 +71,14 @@ Recuperación profunda cuando el driver está ausente o inconsistente:
 ```
 
 > La recuperación profunda puede requerir dos reinicios. Tras cada reinicio, vuelva a ejecutar `RepairPDF` hasta obtener estado saludable.
+
+Escanear y limpiar software de fabricantes (HP, Epson, Canon, etc.):
+
+```powershell
+.\APPrinterDoctor.ps1 -Action CleanVendors
+```
+
+> La acción detecta aplicaciones de fabricantes relacionadas con impresión, las lista y solicita confirmación antes de desinstalarlas. Tras la limpieza reinicia el Spooler. También puede solo escanear desde el menú (opción 8). Se recomienda ejecutar Health Check después para validar el estado del sistema.
 
 ## Códigos de salida
 

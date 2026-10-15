@@ -1,10 +1,12 @@
 #requires -Version 5.1
 <#
 .SYNOPSIS
-    APSoft APPrinterDoctor v1.1.0
+    APSoft APPrinterDoctor v1.2.0
 .DESCRIPTION
     Diagnostica y repara componentes comunes del subsistema de impresion de Windows,
     incluida la recuperacion de Microsoft Print to PDF.
+    Incluye deteccion y limpieza de software de fabricantes (HP, Epson, Canon, Brother,
+    Lexmark, Samsung, Xerox, Ricoh, Dell) cuyos residuos suelen generar conflictos.
 .NOTES
     Autor: Antonio Pulido / APSoft
     Requiere Windows 10/11 y privilegios de administrador.
@@ -12,7 +14,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('Menu','HealthCheck','RepairSpooler','ClearQueue','RepairPDF','FullRepair')]
+    [ValidateSet('Menu','HealthCheck','RepairSpooler','ClearQueue','RepairPDF','CleanVendors','FullRepair')]
     [string]$Action = 'Menu',
     [switch]$ForceComponentRepair,
     [switch]$NoPause
@@ -21,8 +23,9 @@ param(
 Set-StrictMode -Version 3.0
 $ErrorActionPreference = 'Stop'
 $Script:AppName = 'APPrinterDoctor'
-$Script:Version = '1.1.0'
+$Script:Version = '1.2.0'
 $Script:LogRetentionDays = 30
+$Script:VendorKeywords = @('HP','Hewlett-Packard','Epson','Canon','Brother','Lexmark','Samsung','Xerox','Ricoh','Dell')
 $Script:BasePath = Join-Path $env:ProgramData 'APSoft\APPrinterDoctor'
 $Script:LogPath = Join-Path $Script:BasePath 'Logs'
 $Script:LogFile = Join-Path $Script:LogPath ("APPrinterDoctor_{0}.log" -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
@@ -133,6 +136,85 @@ function Repair-APPrintToPDF {
     return 2
 }
 
+function Get-APVendorSoftware {
+    [CmdletBinding()] param()
+    Write-APLog 'Escaneando software de fabricantes de impresoras.'
+    $patterns = $Script:VendorKeywords
+    $printRelated = @('print','scan','printer','jet','fax','imaging','driver')
+    $apps = @()
+    $uninstallPaths = @(
+        'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\*',
+        'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\*'
+    )
+    foreach ($up in $uninstallPaths) {
+        $items = Get-ItemProperty -Path $up -ErrorAction SilentlyContinue
+        foreach ($item in $items) {
+            if (-not $item.DisplayName) { continue }
+            $isVendor = $false
+            foreach ($v in $patterns) { if ($item.DisplayName -match [regex]::Escape($v)) { $isVendor = $true; break } }
+            if (-not $isVendor) { continue }
+            $isPrintRelated = $false
+            foreach ($k in $printRelated) { if ($item.DisplayName -match $k -or ($item.Publisher -and $item.Publisher -match $k)) { $isPrintRelated = $true; break } }
+            if (-not $isPrintRelated) { continue }
+            $apps += [pscustomobject]@{
+                Name = $item.DisplayName
+                Version = $item.DisplayVersion
+                Vendor = $item.Publisher
+                UninstallString = $item.UninstallString
+                QuietUninstall = $item.QuietUninstallString
+                RegistryPath = $item.PSPath -replace 'Microsoft.PowerShell.Core\\Registry::',''
+            }
+        }
+    }
+    if ($apps.Count -eq 0) { Write-APLog 'No se encontro software de fabricantes relacionado con impresion.' 'OK' }
+    else { Write-APLog "Se detectaron $($apps.Count) aplicaciones de fabricantes." 'WARN' }
+    return ,$apps
+}
+
+function Remove-APVendorSoftware {
+    [CmdletBinding(SupportsShouldProcess)] param()
+    $apps = Get-APVendorSoftware
+    if ($apps.Count -eq 0) {
+        Write-Host 'No hay software de fabricantes para limpiar.' -ForegroundColor Green
+        return 0
+    }
+    Write-Host "`nSoftware de fabricantes detectado:" -ForegroundColor Cyan
+    $apps | Select-Object Name,Version,Vendor | Format-Table -AutoSize
+    if (-not $PSCmdlet.ShouldProcess('Software de fabricantes','Desinstalar aplicaciones detectadas')) {
+        Write-APLog 'Limpieza de fabricantes cancelada por el usuario.' 'WARN'
+        return 2
+    }
+    $removed = 0; $failed = 0
+    foreach ($app in $apps) {
+        Write-Host "Desinstalando: $($app.Name)" -ForegroundColor Yellow
+        $uninstallCmd = $app.QuietUninstall
+        if (-not $uninstallCmd) { $uninstallCmd = $app.UninstallString }
+        if (-not $uninstallCmd) {
+            Write-APLog "Sin comando de desinstalacion para $($app.Name). Omitido." 'WARN'
+            $failed++
+            continue
+        }
+        try {
+            if ($uninstallCmd -match '^"(.+)"\s*(.*)$') {
+                $exe = $Matches[1]; $args = $Matches[2]
+                if (-not $args -or $args -notmatch '/S|--quiet|--silent|/qn|/quiet') { $args = "$args /S".Trim() }
+                Start-Process -FilePath $exe -ArgumentList $args -Wait -NoNewWindow -ErrorAction Stop
+            } else {
+                Start-Process -FilePath 'cmd.exe' -ArgumentList "/c $uninstallCmd" -Wait -NoNewWindow -ErrorAction Stop
+            }
+            Write-APLog "Desinstalado: $($app.Name)" 'OK'
+            $removed++
+        } catch {
+            Write-APLog "Fallo desinstalando $($app.Name): $($_.Exception.Message)" 'ERROR'
+            $failed++
+        }
+    }
+    $spoolerSvc = Get-Service Spooler -ErrorAction SilentlyContinue
+    if ($spoolerSvc -and $spoolerSvc.Status -eq 'Running') { Restart-Service Spooler -Force -ErrorAction SilentlyContinue }
+    Write-APLog "Limpieza vendor: $removed desinstaladas, $failed fallidas." $(if($failed -eq 0){'OK'}else{'WARN'})
+    return $(if ($failed -eq 0 -and $removed -gt 0) { 0 } elseif ($removed -eq 0) { 2 } else { 2 })
+}
+
 function Invoke-APFullRepair {
     Repair-APSpooler
     Clear-APPrintQueue -Confirm:$false
@@ -154,6 +236,8 @@ function Show-APMenu {
         Write-Host '4. Reparar Microsoft Print to PDF'
         Write-Host '5. Recuperacion completa PDF (puede requerir reinicios)'
         Write-Host '6. Reparacion completa'
+        Write-Host '7. Limpiar software de fabricantes (HP/Epson/Canon...)'
+        Write-Host '8. Escanear software de fabricantes (solo deteccion)'
         Write-Host '0. Salir'
         $choice=Read-Host 'Seleccione una opcion'
         try {
@@ -164,6 +248,8 @@ function Show-APMenu {
                 '4'{Repair-APPrintToPDF|Out-Null}
                 '5'{Repair-APPrintToPDF -ForceComponentRepair|Out-Null}
                 '6'{Invoke-APFullRepair|Out-Null}
+                '7'{Remove-APVendorSoftware|Out-Null}
+                '8'{Get-APVendorSoftware|Format-Table Name,Version,Vendor -AutoSize}
                 '0'{return}
                 default{Write-Host 'Opcion no valida.' -ForegroundColor Yellow}
             }
@@ -180,6 +266,7 @@ try {
         'RepairSpooler'{Repair-APSpooler;0}
         'ClearQueue'{Clear-APPrintQueue -Confirm:$false;0}
         'RepairPDF'{Repair-APPrintToPDF -ForceComponentRepair:$ForceComponentRepair}
+        'CleanVendors'{Remove-APVendorSoftware -Confirm:$false}
         'FullRepair'{Invoke-APFullRepair}
         default{Show-APMenu;0}
     }

@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0
+- Nueva accion `CleanVendors`: deteccion y desinstalacion de software de fabricantes (HP, Epson, Canon, Brother, Lexmark, Samsung, Xerox, Ricoh, Dell) relacionado con impresion.
+- Escaneo sin desinstalar desde el menu (opcion 8) y accion automatizable `CleanVendors`.
+- Reinicio del Spooler tras la limpieza para recargar drivers.
+
 ## 1.1.0
 - Rotación automática de logs con retención de 30 días.
 - Pruebas automatizadas con Pester 5.

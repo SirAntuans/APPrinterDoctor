@@ -22,6 +22,7 @@ Describe 'APPrinterDoctor - Parametros' {
         $param | Should -Not -BeNullOrEmpty
         $validateSet = $param.Attributes | Where-Object { $_.TypeName.Name -eq 'ValidateSet' }
         $validateSet | Should -Not -BeNullOrEmpty
+        ($validateSet.PositionalArguments.Extent.Text -join ',') | Should -Be "'Menu','HealthCheck','RepairSpooler','ClearQueue','RepairPDF','CleanVendors','FullRepair'"
     }
 
     It 'Declara ForceComponentRepair como switch' {
@@ -34,7 +35,7 @@ Describe 'APPrinterDoctor - Parametros' {
 Describe 'APPrinterDoctor - Estructura' {
     It 'Define las funciones principales' {
         $functions = $ast.FindAll({ param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] }, $true)
-        foreach ($name in @('Write-APLog','Test-APAdministrator','Assert-APWindows','Get-APHealthCheck','Repair-APSpooler','Clear-APPrintQueue','Repair-APPrintToPDF','Invoke-APFullRepair','Show-APMenu')) {
+        foreach ($name in @('Write-APLog','Test-APAdministrator','Assert-APWindows','Get-APHealthCheck','Repair-APSpooler','Clear-APPrintQueue','Repair-APPrintToPDF','Get-APVendorSoftware','Remove-APVendorSoftware','Invoke-APFullRepair','Show-APMenu')) {
             ($functions | Where-Object { $_.Name -eq $name }) | Should -Not -BeNullOrEmpty
         }
     }
@@ -42,6 +43,13 @@ Describe 'APPrinterDoctor - Estructura' {
     It 'Implementa rotacion de logs' {
         $content = Get-Content $scriptPath -Raw
         $content | Should -Match 'LogRetentionDays'
+    }
+
+    It 'Implementa deteccion de fabricantes' {
+        $content = Get-Content $scriptPath -Raw
+        $content | Should -Match 'VendorKeywords'
+        $content | Should -Match 'Get-APVendorSoftware'
+        $content | Should -Match 'Remove-APVendorSoftware'
     }
 }
 
